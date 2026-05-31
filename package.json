@@ -10,6 +10,14 @@
     "start": "node dist/cli.js",
     "release": "node scripts/release.mjs"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ix1024/mp3convert.git"
+  },
+  "homepage": "https://github.com/ix1024/mp3convert#readme",
+  "bugs": {
+    "url": "https://github.com/ix1024/mp3convert/issues"
+  },
   "dependencies": {
     "chalk": "^5.3.0",
     "cli-progress": "^3.12.0",
