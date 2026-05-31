@@ -9,17 +9,45 @@ const chalk_1 = __importDefault(require("chalk"));
 const child_process_1 = require("child_process");
 const converter_1 = require("./core/converter");
 const rl = readline_1.default.createInterface({ input: process.stdin, output: process.stdout });
-function pickFolder(prompt, defaultVal) {
+function tryPickFolder(prompt, defaultVal) {
     try {
         const script = [
             `set f to choose folder with prompt "${prompt}" default location (POSIX file "${defaultVal}" as alias)`,
             `POSIX path of f`
         ].join("\n");
-        return (0, child_process_1.execFileSync)("osascript", ["-e", script], { encoding: "utf8" }).trim();
+        return (0, child_process_1.execFileSync)("osascript", ["-e", script], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
     }
-    catch {
-        return defaultVal;
+    catch (e) {
+        // 用户点了取消
+        if (e.stderr?.includes("User canceled") || e.message?.includes("User canceled"))
+            return null;
+        // 系统权限被拒或其它错误，降级到文字输入
+        return undefined;
     }
+}
+function askDir(question, defaultVal) {
+    const hint = chalk_1.default.dim(`(默认: ${defaultVal})`);
+    return new Promise((resolve) => {
+        rl.question(`${question} ${hint}: `, (answer) => {
+            resolve(answer.trim() || defaultVal);
+        });
+    });
+}
+async function pickFolder(label, prompt, defaultVal) {
+    console.log(`选择${label}...`);
+    const result = tryPickFolder(prompt, defaultVal);
+    if (result === null) {
+        // 用户取消了弹窗，改为文字输入
+        console.log(chalk_1.default.yellow(`已取消，请手动输入${label}`));
+        return askDir(label, defaultVal);
+    }
+    if (result === undefined) {
+        // 权限被拒，提示用户并降级
+        console.log(chalk_1.default.yellow(`无法弹出文件夹选择（系统权限被拒），请手动输入路径`));
+        console.log(chalk_1.default.dim("提示: 系统偏好设置 → 隐私与安全 → 自动化 → 允许 Terminal"));
+        return askDir(label, defaultVal);
+    }
+    return result;
 }
 function askChoice(question, choices, defaultIdx = 0) {
     const formatted = choices.map((c, i) => (i === defaultIdx ? chalk_1.default.cyan(`[${c}]`) : c)).join(" / ");
@@ -40,12 +68,10 @@ function askNumber(question, defaultVal) {
 }
 async function main() {
     console.log(chalk_1.default.bold("\n🎵 mp3convert\n"));
-    console.log("选择输入目录...");
-    const input = pickFolder("选择要转换的文件夹", process.cwd());
+    const input = await pickFolder("输入目录", "选择要转换的文件夹", process.cwd());
     console.log(chalk_1.default.dim(`输入: ${input}`));
     const defaultOutput = path_1.default.join(process.cwd(), "converted");
-    console.log("选择输出目录...");
-    const output = pickFolder("选择保存 MP3 的文件夹", defaultOutput);
+    const output = await pickFolder("输出目录", "选择保存 MP3 的文件夹", defaultOutput);
     console.log(chalk_1.default.dim(`输出: ${output}`));
     const quality = await askChoice("音质", ["128k", "192k", "320k"], 1);
     const parallel = await askNumber(`并发数 (默认: ${chalk_1.default.cyan("2")}): `, 2);
